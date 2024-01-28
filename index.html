@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Super Pong Wars CGA | David Adams</title>
+    <link rel="canonical" href=# />
+    <link  href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.js"></script>
+    <script src="/resources/demos/external/jquery-mousewheel/jquery.mousewheel.js"></script>
+    <style>
+      html {
+        height: 100%;
+      }
+
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: linear-gradient(160deg, #FF55FF 0%, #55FFFF 100%);
+      }
+
+      #title {
+        font-family: serif;
+        margin-top: 30px;
+        font-size: 40px;
+        padding-left: 20px;
+        font-weight:bolder;
+        color: #000000;
+      }
+
+      #fireInputPrompt {
+        font-family: monospace;
+        margin-top: 30px;
+        font-size: 20px;
+        padding-left: 20px;
+        text-align:center;
+        font-weight:bold;
+        color: #AA0000;
+      }
+
+      #iceInputPrompt {
+        font-family: monospace;
+        margin-top: 30px;
+        font-size: 20px;
+        padding-left: 20px;
+        text-align:center;
+        font-weight:bold;
+        color: #0000AA;
+      }
+
+      #fireInputSpinner {
+        width: 40px;
+      }
+
+      #iceInputSpinner {
+        width: 40px;
+      }
+
+      #container {
+        display: flex;
+        width: min(100%, 70vh);
+        max-width: 600px;
+        align-items: center;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      #pongCanvas {
+        display: block;
+        border-radius: 4px;
+        overflow: hidden;
+        width: 100%;
+        margin-top: auto;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+      }
+
+      #score {
+        font-family: monospace;
+        margin-top: 30px;
+        font-size: 20px;
+        padding-left: 20px;
+        color: #000000;
+      }
+
+      #made {
+        font-family: monospace;
+        margin-top: auto;
+        margin-bottom: 20px;
+        font-size: 12px;
+        padding-left: 20px;
+      }
+
+      #made a {
+        color: #555555;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="container">
+      <p id="title">
+        Super Pong Wars CGA
+      </p>
+      
+      <div id="fireInputPrompt">
+        Super-Spicy Factor (0-9): <input type="text" id="fireInputSpinner" value="0">
+      </div>
+
+      <div id="iceInputPrompt">
+        Super-Minty Factor (0-9): <input type="text" id="iceInputSpinner" value="0">
+      </div>
+
+      <canvas id="pongCanvas" width="800" height="800"></canvas>
+      <div id="score"></div>
+      <p id="made">
+        Made by David Adams | Source on
+        <a href="https://github.com/ThisDavehead/super-pong-wars-cga">github</a>
+      </p>
+    </div>
+  </body>
+
+  <script>
+    // Idea for Pong wars: https://twitter.com/nicolasdnl/status/1749715070928433161
+    // First place I personally saw it: https://twitter.com/vnglst/status/1751278052154179770
+
+    $( "#fireInputSpinner" ).spinner({
+      min:0,
+      max:9
+    });
+    $( "#iceInputSpinner" ).spinner({
+      min:0,
+      max:9
+    });
+
+    let fireMax = $( "#fireInputSpinner" ).spinner("value");
+    let iceMax = $( "#iceInputSpinner" ).spinner("value");
+
+    const canvas = document.getElementById("pongCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreElement = document.getElementById("score");
+
+    const FIRE_COLOR = "#FF5555";
+    const FIRE_BALL_COLOR = "#FFFF55";
+
+    const ICE_COLOR = "#5555FF";
+    const ICE_BALL_COLOR = "#55FFFF";
+
+    let fireHitCount = 0;
+    let iceHitCount = 0;
+    let fireBounceBool = true;
+    let iceBounceBool = true;
+
+    const SQUARE_SIZE = 20;
+
+    const numSquaresX = canvas.width / SQUARE_SIZE;
+    const numSquaresY = canvas.height / SQUARE_SIZE;
+
+    let squares = [];
+
+    for (let i = 0; i < numSquaresX; ++i) {
+      squares[i] = [];
+      for (let j = 0; j < numSquaresY; ++j) {
+        squares[i][j] = i < numSquaresX / 2 ? FIRE_COLOR : ICE_COLOR;
+      }
+    }
+
+    let x1 = canvas.width / 4;
+    let y1 = canvas.height / 2;
+    let dx1 = 12.5;
+    let dy1 = -12.5;
+
+    let x2 = (canvas.width / 4) * 3;
+    let y2 = canvas.height / 2;
+    let dx2 = -12.5;
+    let dy2 = 12.5;
+
+    let iteration = 0;
+
+    let fireScoreGlob = 0;
+    let iceScoreGlob = 0;
+
+    function drawBall(x, y, color) {
+      ctx.beginPath();
+      ctx.arc(x, y, SQUARE_SIZE / 2, 0, Math.PI * 2, false);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawSquares() {
+      for (let i = 0; i < numSquaresX; ++i) {
+        for (let j = 0; j < numSquaresY; ++j) {
+          ctx.fillStyle = squares[i][j];
+          ctx.fillRect(
+            i * SQUARE_SIZE,
+            j * SQUARE_SIZE,
+            SQUARE_SIZE,
+            SQUARE_SIZE
+          );
+        }
+      }
+    }
+
+    function randomNum(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function updateSquareAndBounce(x, y, dx, dy, color) {
+      let updatedDx = dx;
+      let updatedDy = dy;
+
+      // Check multiple points around the ball's circumference
+      for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+        let checkX = x + Math.cos(angle) * (SQUARE_SIZE / 2);
+        let checkY = y + Math.sin(angle) * (SQUARE_SIZE / 2);
+
+        let i = Math.floor(checkX / SQUARE_SIZE);
+        let j = Math.floor(checkY / SQUARE_SIZE);
+
+        if (i >= 0 && i < numSquaresX && j >= 0 && j < numSquaresY) {
+          if (squares[i][j] !== color) {
+            squares[i][j] = color;
+            // Count as a hit for this color
+            updateColorScore(color);
+            if ((color === FIRE_COLOR && fireBounceBool == false) || (color === ICE_COLOR && iceBounceBool == false)){
+              return {dx: updatedDx, dy: updatedDy};
+            }
+
+            // Bounce direction based on the angle
+            if (Math.abs(Math.cos(angle)) > Math.abs(Math.sin(angle))) {
+              updatedDx = -updatedDx;
+            } else {
+              updatedDy = -updatedDy;
+            }
+
+            // Add some randomness to the bounce to prevent the balls from getting stuck in a loop
+            updatedDx += randomNum(-0.01, 0.01);
+            updatedDy += randomNum(-0.01, 0.01);
+          }
+        }
+      }
+
+      return { dx: updatedDx, dy: updatedDy };
+    }
+
+    function updateColorScore(color){
+      if (color === FIRE_COLOR) {
+        ++fireScoreGlob;
+        ++fireHitCount;
+      } else if (color === ICE_COLOR) {
+        ++iceScoreGlob;
+        ++iceHitCount;
+      }
+    }
+
+    function checkColorBools(){
+      if (fireHitCount < fireMax){
+        fireBounceBool = false;
+      } else {
+        fireBounceBool = true;
+        fireHitCount = 0;
+      }
+      if (iceHitCount < iceMax){
+        iceBounceBool = false;
+      } else {
+        iceBounceBool = true;
+        iceHitCount = 0;
+      }
+    }
+
+    function displayScore(){
+      scoreElement.textContent = `Spicy: ${fireScoreGlob} | Minty: ${iceScoreGlob}`;
+    }
+
+    function checkBoundaryCollision(x, y, dx, dy) {
+      if (x + dx > canvas.width - SQUARE_SIZE / 2 || x + dx < SQUARE_SIZE / 2) {
+        dx = -dx;
+      }
+      if (
+        y + dy > canvas.height - SQUARE_SIZE / 2 ||
+        y + dy < SQUARE_SIZE / 2
+      ) {
+        dy = -dy;
+      }
+
+      return { dx: dx, dy: dy };
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      fireMax = $( "#fireInputSpinner" ).spinner("value");
+      iceMax = $( "#iceInputSpinner" ).spinner("value");
+      drawSquares();
+
+      drawBall(x1, y1, FIRE_BALL_COLOR);
+      let bounce1 = updateSquareAndBounce(x1, y1, dx1, dy1, FIRE_COLOR);
+      dx1 = bounce1.dx;
+      dy1 = bounce1.dy;
+
+      drawBall(x2, y2, ICE_BALL_COLOR);
+      let bounce2 = updateSquareAndBounce(x2, y2, dx2, dy2, ICE_COLOR);
+      dx2 = bounce2.dx;
+      dy2 = bounce2.dy;
+
+      let boundary1 = checkBoundaryCollision(x1, y1, dx1, dy1);
+      dx1 = boundary1.dx;
+      dy1 = boundary1.dy;
+
+      let boundary2 = checkBoundaryCollision(x2, y2, dx2, dy2);
+      dx2 = boundary2.dx;
+      dy2 = boundary2.dy;
+
+      x1 += dx1;
+      y1 += dy1;
+      x2 += dx2;
+      y2 += dy2;
+
+      ++iteration;
+      if (iteration % 1_000 === 0) console.log("interation", iteration);
+
+      displayScore();
+
+      checkColorBools();
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+  </script>
+</html>
